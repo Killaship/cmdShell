@@ -1,14 +1,57 @@
-#include <MemoryFree.h>
-#include <avr/wdt.h>
+
 String sdata="";  // Initialised to nothing.
 byte test;
 bool sdPresent = false;
 
 #include <SPI.h>
 #include <SD.h>
+#include <MemoryFree.h>
+#include <avr/wdt.h>
 
 File root;
 
+void printHelp() {
+  Serial.println(F("Command Interpreter adapted from https://www.best-microcontroller-projects.com/arduino-string.html"));
+  Serial.println(F("Make sure the line ending that your monitor sends is \r, for sake of program compatibility."));
+  Serial.println(F("Commands are v (set a value in memory), h (display help)"));
+  Serial.println(F(", d (list contents of SD card if there is one, c. (list contents of a given file.),"));
+  Serial.println(F("r (reboot), t (text editor, edits text of a given file.), R (delete a given file)"));  
+}
+
+void rmFile(String file) {
+  SD.remove(file);
+  
+}
+
+void textEdit(String file) {
+  String fileIn;
+  Serial.println(F("||Barebones Typewriter-style text editor||"));
+  Serial.println(F("Backspace is disabled because technical raisins."));
+  Serial.println(F("Type \"quitwrite\" to exit the editor."));
+  File editfile = SD.open(file, FILE_WRITE);
+  if(file) {
+  
+  while(1) {
+   
+    fileIn = Serial.readStringUntil("\r");
+    if(fileIn == "quitwrite\r") {
+      break;
+    }
+    else {
+      if(fileIn != "\n") {
+          editfile.println(fileIn + "\n");
+      }
+    }
+    
+    
+  }
+  
+  editfile.close();
+  }
+  else {
+  Serial.println("[ERROR] Failed to open file");
+}
+}
 void printFile(String file) {
    
       File dataFile = SD.open(file);
@@ -83,13 +126,12 @@ void setup (void) {
   Serial.println(F("[NOTE] This program assumes the use of an Arduino UNO SD card"));
   Serial.println(F("shield available with the initialization pin at pin 10."));
   Serial.println(F("\nInitializing SD card...\n"));
-    
-  Serial.println(F("[NOTE] Make sure your serial terminal outputs a CR character at the end of a line."));
-  Serial.println(F("The Arduino IDE serial monitor is preferable as it lets you choose what line ending to use.\n"));
 
+  sdPresent = true;
   if (!SD.begin(10)) {
     Serial.println(F("[ERROR] NO SD CARD AVAILABLE!\n"));
     Serial.println(F("initialization failed! continuing without SD card!\n"));
+    sdPresent = false;
   }
   Serial.println(F("Initialization done."));
   Serial.println(F("Opening root directory of SD card..."));
@@ -98,16 +140,15 @@ void setup (void) {
 
   Serial.println(F("Done!\n"));
 
-  Serial.println(F("Command Interpreter adapted from https://www.best-microcontroller-projects.com/arduino-string.html"));
-  Serial.println(F("Commands are v (set a value in memory), h (display help)"));
-  Serial.println(F(", d (list contents of SD card if there is one, and, c. (list contents of a given file.),"));
-  Serial.println(F("r (reboot)"));
+  printHelp();
 
 }
 
 void loop(void) {
 String valStr;
 String fileName;
+String editfileName;
+String delFile;
 int val;
 byte ch;
    if (Serial.available()) {
@@ -127,8 +168,12 @@ byte ch;
                
             }
             root.close();
-            
+            if(sdPresent == true) {
             printFile(fileName);
+            }
+            else{
+              Serial.println(F("[ERROR] SD card not present!"));
+            }
            
             root = SD.open("/");
             break;
@@ -141,17 +186,19 @@ byte ch;
             Serial.println(val);
             break;
          case 'h':
-            Serial.println(F("Command Interpreter adapted from https://www.best-microcontroller-projects.com/arduino-string.html"));
-            Serial.println(F("Commands are v (set a value in memory), h (display help)"));
-            Serial.println(F(", d (list contents of SD card if there is one, and, c. (list contents of a given file.),"));
-            Serial.println(F("r (reboot)"));
-            
+         printHelp();
             break;
          case 'd':
+            if(sdPresent == true) {
+              
             printDirectory(root, 0);
             
             root = SD.open("/");
             root.rewindDirectory();
+         } 
+         else {
+          Serial.println(F("[ERROR] SD card not present!"));
+         }
             break;
          case 'r':
             reboot();
@@ -160,8 +207,24 @@ byte ch;
          Serial.print(sdata);
          Serial.println(" is an invalid command!");
          break;
-         } // switch
-
+          // switch
+         case 't':
+          if (sdata.length()>1){
+               editfileName = sdata.substring(1);
+               
+            }
+            root.close();
+            textEdit(editfileName);
+            root = SD.open("/");
+         
+         break;
+        case 'R':
+           if (sdata.length()>1){
+               delFile = sdata.substring(1);
+            }
+         rmFile(delFile);
+         break;
+         }
          sdata = ""; // Clear the string ready for the next command.
       } // if \r
    }  // available
